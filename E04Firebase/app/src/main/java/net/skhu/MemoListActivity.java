@@ -18,6 +18,13 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import com.google.firebase.database.DataSnapshot;
+import com.google.firebase.database.DatabaseError;
+import com.google.firebase.database.DatabaseReference;
+import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.GenericTypeIndicator;
+import com.google.firebase.database.ValueEventListener;
+
 import java.util.ArrayList;
 import java.util.ListIterator;
 
@@ -25,6 +32,26 @@ public class MemoListActivity extends AppCompatActivity {
     MemoAdapter memoAdapter;
     ArrayList<Memo> arrayList;
     ActivityResultLauncher<Intent> activityResultLauncher;
+    DatabaseReference item02;
+
+    ValueEventListener firebaseListener = new ValueEventListener() {
+        @Override
+        public void onDataChange(DataSnapshot dataSnapshot) {
+            GenericTypeIndicator<ArrayList<Memo>> typeIndicator;
+            typeIndicator = new GenericTypeIndicator<ArrayList<Memo>>() {
+            };
+            ArrayList<Memo> temp = dataSnapshot.getValue(typeIndicator);
+            if (temp != null) {
+                arrayList.clear();
+                arrayList.addAll(temp);
+                memoAdapter.notifyDataSetChanged();
+            }
+        }
+
+        @Override
+        public void onCancelled(DatabaseError error) {
+        }
+    };
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,12 +73,17 @@ public class MemoListActivity extends AppCompatActivity {
                     Intent intent = result.getData();
                     Memo memo = (Memo) intent.getSerializableExtra("MEMO");
                     Integer index = (Integer) intent.getSerializableExtra("index");
-                    if (index == null) arrayList.add(memo);
-                    else arrayList.set(index, memo);
+                    if (index == null)
+                        arrayList.add(memo);
+                    else
+                        arrayList.set(index, memo);
+                    item02.setValue(arrayList);
                     memoAdapter.notifyDataSetChanged();
                 }
             }
         });
+        this.item02 = FirebaseDatabase.getInstance().getReference("item02");
+        this.item02.addValueEventListener(firebaseListener);
     }
 
     @Override
@@ -82,7 +114,8 @@ public class MemoListActivity extends AppCompatActivity {
             public void onClick(DialogInterface dialog, int index) {
                 ListIterator<Memo> iterator = arrayList.listIterator();
                 while (iterator.hasNext()) if (iterator.next().isChecked()) iterator.remove();
-                memoAdapter.notifyDataSetChanged();
+                // memoAdapter.notifyDataSetChanged();
+                item02.setValue(arrayList);
             }
         });
         builder.setNegativeButton(R.string.no, null);

@@ -11,6 +11,9 @@ public class Memo implements Serializable {
     Date date;
     boolean checked;
 
+    public Memo() {
+    }
+
     public Memo(String title, String content, Date date) {
         this.title = title;
         this.content = content;
