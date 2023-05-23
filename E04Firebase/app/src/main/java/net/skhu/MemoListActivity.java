@@ -18,38 +18,59 @@ import android.os.Bundle;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
-import com.google.firebase.database.GenericTypeIndicator;
-import com.google.firebase.database.ValueEventListener;
 
 import java.util.ArrayList;
-import java.util.ListIterator;
+import java.util.Collections;
 
 public class MemoListActivity extends AppCompatActivity {
     MemoAdapter memoAdapter;
-    ArrayList<Memo> arrayList;
+    ArrayList<Memo> arrayList = new ArrayList<>();
+    ArrayList<String> keyList = new ArrayList<>();
     ActivityResultLauncher<Intent> activityResultLauncher;
-    DatabaseReference item02;
-
-    ValueEventListener firebaseListener = new ValueEventListener() {
-        @Override
-        public void onDataChange(DataSnapshot dataSnapshot) {
-            GenericTypeIndicator<ArrayList<Memo>> typeIndicator;
-            typeIndicator = new GenericTypeIndicator<ArrayList<Memo>>() {
-            };
-            ArrayList<Memo> temp = dataSnapshot.getValue(typeIndicator);
-            if (temp != null) {
-                arrayList.clear();
-                arrayList.addAll(temp);
-                memoAdapter.notifyDataSetChanged();
-            }
+    DatabaseReference item03;
+    ChildEventListener firebaseListener = new ChildEventListener() {
+        private int findIndex(String key) {
+            return Collections.binarySearch(keyList, key);
         }
 
         @Override
-        public void onCancelled(DatabaseError error) {
+        public void onChildAdded(DataSnapshot dataSnapshot, String previousChildName) {
+            String key = dataSnapshot.getKey();
+            Memo memo = dataSnapshot.getValue(Memo.class);
+            arrayList.add(memo);
+            keyList.add(key);
+            memoAdapter.notifyItemInserted(arrayList.size() - 1);
+        }
+
+        @Override
+        public void onChildChanged(DataSnapshot dataSnapshot, String previousChildName) {
+            String key = dataSnapshot.getKey();
+            Memo memo = dataSnapshot.getValue(Memo.class);
+            int index = findIndex(key);
+            arrayList.set(index, memo);
+            memoAdapter.notifyItemChanged(index);
+        }
+
+        @Override
+        public void onChildRemoved(DataSnapshot dataSnapshot) {
+            String key = dataSnapshot.getKey();
+            int index = findIndex(key);
+            arrayList.remove(index);
+            keyList.remove(index);
+            memoAdapter.notifyItemRemoved(index);
+        }
+
+        @Override
+        public void onChildMoved(DataSnapshot dataSnapshot, String previousChildName) {
+        }
+
+        @Override
+        public void onCancelled(DatabaseError databaseError) {
         }
     };
 
@@ -57,7 +78,6 @@ public class MemoListActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_memo_list);
-        arrayList = new ArrayList<Memo>();
 
         memoAdapter = new MemoAdapter(this, arrayList);
         RecyclerView recyclerView = (RecyclerView) findViewById(R.id.recyclerView);
@@ -73,17 +93,19 @@ public class MemoListActivity extends AppCompatActivity {
                     Intent intent = result.getData();
                     Memo memo = (Memo) intent.getSerializableExtra("MEMO");
                     Integer index = (Integer) intent.getSerializableExtra("index");
-                    if (index == null)
-                        arrayList.add(memo);
-                    else
-                        arrayList.set(index, memo);
-                    item02.setValue(arrayList);
+                    if (index == null) { //등록할 때
+                        String key = item03.push().getKey(); //새로운키 만들기
+                        item03.child(key).setValue(memo);
+                    } else { //수정할 때
+                        String key = keyList.get(index);
+                        item03.child(key).setValue(memo);
+                    }
                     memoAdapter.notifyDataSetChanged();
                 }
             }
         });
-        this.item02 = FirebaseDatabase.getInstance().getReference("item02");
-        this.item02.addValueEventListener(firebaseListener);
+        this.item03 = FirebaseDatabase.getInstance().getReference("item03");
+        this.item03.addChildEventListener(firebaseListener);
     }
 
     @Override
@@ -112,10 +134,9 @@ public class MemoListActivity extends AppCompatActivity {
         builder.setPositiveButton(R.string.yes, new DialogInterface.OnClickListener() {
             @Override
             public void onClick(DialogInterface dialog, int index) {
-                ListIterator<Memo> iterator = arrayList.listIterator();
-                while (iterator.hasNext()) if (iterator.next().isChecked()) iterator.remove();
-                // memoAdapter.notifyDataSetChanged();
-                item02.setValue(arrayList);
+                for (int i = 0; i < arrayList.size(); ++i)
+                    if (arrayList.get(i).isChecked())  //삭제하기
+                        item03.child(keyList.get(i)).removeValue();
             }
         });
         builder.setNegativeButton(R.string.no, null);
